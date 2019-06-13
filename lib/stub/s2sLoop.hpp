@@ -224,10 +224,11 @@ class Loop {
      * Add a reminder loop after the unrolled loop
      * 
      * @param unrollSize - size of the unroll
-     * @param reminder - Boolean to know if a reminder is needed
+     * @param reminder - Boolean to know if wehave to unroll and jam
      * @return bool - return true if the unroll was apply correctly
      */
     bool unroll (size_t unrollSize, bool reminder=false);
+
     /**
      * FullUnroll the loop but don't delete the loop to our the tree
      * @param unrollSize - size of the unroll
@@ -443,9 +444,10 @@ bool handleStopKeyword (SgBasicBlock* body);
  * @param loop - Loop of type "for" (C/C++ style) 
  * @param nest - It's possible to choose the nest of the loop to unroll
  * @param unrollSize - the size of the unroll
+ * @param reminder - to know if we have to unroll and jam
  * @return bool: return true if unroll transformation was applied
  */
-bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize);
+bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize, bool reminder);
 
 /** 
  * Return a C/C++ For loop Unrolled in function of the unrollsize parameter 
@@ -455,7 +457,7 @@ bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize);
  * @param size_t unrollSize: Number of time to unroll the loop
  * @return a unroll copy of the loop
  */
-SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize);
+SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize, bool reminder);
 
 /** 
  * unroll a Fortran DO loop
@@ -464,7 +466,7 @@ SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize);
  * @param loop: the DO loop to unroll
  * @param unrollSize: the size of the unroll
  */
-SgFortranDo * loopUnroll(SgFortranDo * loop, size_t unrollSize);
+SgFortranDo * loopUnroll(SgFortranDo * loop, size_t unrollSize, bool reminder);
 
 /**
  *

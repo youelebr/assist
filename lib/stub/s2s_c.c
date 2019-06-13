@@ -115,7 +115,7 @@ typedef struct profilerLoopInfo {
   // DECAN
   float dl1_ratio_min;
   float dl1_ratio_max;
-  float dl1_ratio_avg;
+  float dl1_ratio_mean;
   // VPROF
   int nb_ite_min;
   int nb_ite_max;
@@ -376,7 +376,7 @@ static int l_s2s_start_oneview ( lua_State * L ) {
       // DECAN
       float dl1_ratio_min;
       float dl1_ratio_max;
-      float dl1_ratio_avg;
+      float dl1_ratio_mean;
       // VPROF
       int nb_ite_min;
       int nb_ite_max;
@@ -411,7 +411,7 @@ static int l_s2s_start_oneview ( lua_State * L ) {
       // DECAN
       pi[itpi].dl1_ratio_min = -1.0;
       pi[itpi].dl1_ratio_max = -1.0;
-      pi[itpi].dl1_ratio_avg = -1.0;
+      pi[itpi].dl1_ratio_mean = -1.0;
       // VPROF
       pi[itpi].nb_ite_min = -1;
       pi[itpi].nb_ite_max = -1;
@@ -457,10 +457,10 @@ static int l_s2s_start_oneview ( lua_State * L ) {
           luaL_checktype (L, nb_args+4, LUA_TNUMBER);
           pi[itpi].dl1_ratio_max = lua_tonumber(L, nb_args+4);
           if(DEBUG) printf("[C] dl1_ratio_max : %f\n",pi[itpi].dl1_ratio_max);
-        } else if (strcmp (key, "dl1_ratio_avg") == 0) {
+        } else if (strcmp (key, "dl1_ratio_mean") == 0) {
           luaL_checktype (L, nb_args+4, LUA_TNUMBER);
-          pi[itpi].dl1_ratio_avg = lua_tonumber(L, nb_args+4);
-          if(DEBUG) printf("[C] dl1_ratio_avg : %f\n",pi[itpi].dl1_ratio_avg);
+          pi[itpi].dl1_ratio_mean = lua_tonumber(L, nb_args+4);
+          if(DEBUG) printf("[C] dl1_ratio_mean : %f\n",pi[itpi].dl1_ratio_mean);
         } else if (strcmp (key, "nb_ite_min") == 0) {
           luaL_checktype (L, nb_args+4, LUA_TNUMBER);
           pi[itpi].nb_ite_min = lua_tonumber(L, nb_args+4);
@@ -575,7 +575,7 @@ static int l_s2s_start_oneview ( lua_State * L ) {
       printf("[C] nb_ite_avg : %d\n",pi[i].nb_ite_avg);
       printf("[C] dl1_ratio_min : %f\n",pi[i].dl1_ratio_min);
       printf("[C] dl1_ratio_max : %f\n",pi[i].dl1_ratio_max);
-      printf("[C] dl1_ratio_avg : %f\n",pi[i].dl1_ratio_avg);
+      printf("[C] dl1_ratio_mean : %f\n",pi[i].dl1_ratio_mean);
       printf("[C] vec_ratio : %f\n",pi[i].vec_ratio);
       printf("=======================\n");
     }

@@ -9,7 +9,7 @@ int removeTags(std::vector<ASTLoops*> astloops, std::string directive);
 void applyOptions(int numberOfOptions, char** options, SgProject* project, SgGlobal* root, SgSourceFile* file, int nb_variable_spe, variable_spe* var_spe);
 bool vprof_lct (profilerLoopInfo* pi, Loop* loop);
 
-// Default main
+// Old default main
 extern "C" int intermediaire_cpp (char* input, char* outputprefix , int numberOfLoops, int binLines[], int numberOfOptions, char** options) {
   std::vector<std::string> argv;
   std::string outputName;
@@ -93,7 +93,15 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
 
   for(int itfile=0; itfile < project->numberOfFiles () /*&& !sourceFile*/ ; ++itfile) {
     file = isSgSourceFile(project->get_fileList()[itfile]);
-    if (s2s_api::isFortranFile(file->getFileName ()) || s2s_api::isCCXXFile(file->getFileName ())) {
+
+    currentFileType = "";
+    if (s2s_api::isFortranFile(file->getFileName ())) {
+      currentFileType = "fortran";
+    } else if  (s2s_api::isCCXXFile(file->getFileName ())) {
+      currentFileType = "cpp";
+    }
+
+    if (currentFileType == "fortran" || currentFileType == "c" || currentFileType == "cpp") {
       //std::cout << "File to analyze : " << file->getFileName () << std::endl;;
       currentFile = file->getFileName ();
       if (outputprefix != " ") {
@@ -124,7 +132,7 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
        **   FUNCS   **
        ***************/
       ASTFunction astF(root);
-
+      if(DEBUG) std::cout << "ANALYZING FUNCTIONS" << std::endl;
       // Add directives on functions
       for(int nbf=0; nbf < numberOfFuncs; nbf++) {
         Function * srcFunc = astF.get_function_from_line(funcs[nbf].line);
@@ -165,6 +173,7 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
        **   LOOPS   **
        ***************/
       ASTRoot     astL(root);
+      if(DEBUG) std::cout << "ANALYZING LOOPS" << std::endl;
 
       // Add directives on loops
       for(int nbl=0; nbl < numberOfLoops; nbl++) {
@@ -182,6 +191,14 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
           srcLoop->set_id(loops[nbl].id);
 
           for (int itdir = 0 ; itdir < loops[nbl].nbtransfo; itdir++) {
+            if (DEBUG) {
+              std::cout << "add the directive :" << std::string("MAQAO ")+std::string(loops[nbl].transfo[itdir]) << std::endl;
+              if (loops[nbl].line != -1)
+                std::cout << "above the loop line " << loops[nbl].line << std::endl;
+              else 
+                std::cout << "above the loop labeled " << loops[nbl].label << std::endl;
+            }
+            s2s_api::remove_MAQAO_directives(srcLoop->get_loop_RosePtr(), loops[nbl].label);
             srcLoop->add_directive(std::string("MAQAO ")+std::string(loops[nbl].transfo[itdir]));
           }
 
@@ -211,7 +228,7 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
         }
       }
       
-      if (VERBOSE) std::cout << "--- APPLY DIRECTIVE ON FUNCTIONS & LOOPS ---"<<std::endl;
+      if (DEBUG) std::cout << "--- APPLY DIRECTIVE ON FUNCTIONS & LOOPS ---"<<std::endl;
       //s2s_api::browseFile_and_apply_directives(root);
       astF.apply_directive();
       astL.apply_directive();
@@ -226,7 +243,7 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
   }
 
   int returnID = backend(project);
-  if(returnID && VERBOSE)
+  if(returnID && DEBUG)
     std::cout << "Error ID Return is not 0 : " << returnID << std::endl;  
 
   if (VERBOSE) std::cout << "--------------------------------------------" << std::endl;
@@ -235,6 +252,7 @@ extern "C" int main_config_file (char* input, char* outputprefix , int numberOfL
 }
 
 // (main) Called when we use MAQAO analyzes
+// default main
 extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profilerLoopInfo* pi, int numberOfOptions, char** options) {
   std::vector<std::string> argv;
   std::string outputName;
@@ -246,7 +264,7 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
     outputName = std::string(outputprefix);
   }
 
-  if (DEBUG > 1) {
+  if (DEBUG) {
     printf("[DEBUG INFO] START\n");
     printf("Profiler loop infos : \n");
     printf("===  :\n");
@@ -262,7 +280,7 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
       printf("[C++] nb_ite_avg : %d\n",pi[i].nb_ite_avg);
       printf("[C++] dl1_ratio_min : %f\n",pi[i].dl1_ratio_min);
       printf("[C++] dl1_ratio_max : %f\n",pi[i].dl1_ratio_max);
-      printf("[C++] dl1_ratio_avg : %f\n",pi[i].dl1_ratio_avg);
+      printf("[C++] dl1_ratio_mean : %f\n",pi[i].dl1_ratio_mean);
       printf("[C++] vec_ratio : %f\n",pi[i].vec_ratio);
       printf("=======================\n");
     }
@@ -304,8 +322,8 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
       file->set_unparse_output_filename(outputName);
 
       //DBG_MAQAO msg
-      if (VERBOSE || DEBUG) std::cout << "--- Current file : " << currentFile << " ---" << std::endl;
-      if (VERBOSE || DEBUG) std::cout << "Number of profilers information = "<< nb_pi << std::endl; 
+      if (DEBUG) std::cout << "--- Current file : " << currentFile << " ---" << std::endl;
+      if (DEBUG) std::cout << "Number of profilers information = "<< nb_pi << std::endl; 
       
       SgGlobal * root = file->get_globalScope();
       ASTRoot ast(root);
@@ -319,9 +337,26 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
           continue;
         }
 
+        if(DEBUG) {
+          std::cout << "-----" << std::endl;
+          std::cout << "Loop "<< pi[i].id << " line " << pi[i].lineStart << ":" << pi[i].lineEnd << std::endl;
+          std::cout << "pi[i].vec_ratio=" << pi[i].vec_ratio << std::endl;
+          std::cout << "pi[i].nb_ite_min=" << pi[i].nb_ite_min << std::endl;
+          std::cout << "pi[i].nb_ite_max=" << pi[i].nb_ite_max << std::endl;
+          std::cout << "pi[i].nb_ite_avg=" << pi[i].nb_ite_avg << std::endl;
+          std::cout << "pi[i].dl1_ratio_min=" << pi[i].dl1_ratio_min << std::endl;
+          std::cout << "pi[i].dl1_ratio_max=" << pi[i].dl1_ratio_max << std::endl;
+          std::cout << "pi[i].dl1_ratio_mean=" << pi[i].dl1_ratio_mean << std::endl;
+          std::cout << "-----" << std::endl;
+        }
+
         // CQA
         // TODO: FIND WHEN APPLY THE SVT
-        if (pi[i].vec_ratio < VEC_RATIO_MIN_TO_BV && trans) {
+        if (pi[i].vec_ratio < VEC_RATIO_MIN_TO_BV && 
+          pi[i].vec_ratio != -1 &&
+          (pi[i].nb_ite_min == pi[i].nb_ite_max) && (pi[i].nb_ite_max < NB_ITE_MAX_TO_BV)) {
+          if(DEBUG) std::cout << "Conditions are filed to appli the SVT" << std::endl;
+          
           if (!loop->hasFixBounds()) {
             if ((pi[i].nb_ite_min == pi[i].nb_ite_max) && (pi[i].nb_ite_max < NB_ITE_MAX_TO_BV)) {
               if (VERBOSE > 1 || DEBUG) std::cout << "pi[i].nb_ite_max = " << pi[i].nb_ite_max << std::endl;
@@ -336,19 +371,20 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
                 vs_tmp->value = pi[i].nb_ite_max;
                 vs_tmp->var_name = strdup(vr->get_symbol()->get_name().getString().c_str());
 
-                std::string s_tmp = "!DIR$ MAQAO IF_SPE_"
+                std::string s_tmp = "MAQAO IF_SPE_"
                                     + std::string(vs_tmp->var_name)
                                     + "e" + s2s_api::itoa(vs_tmp->value)
                                     + "_SHORTVECT=" + s2s_api::itoa(pi[i].nb_ite_max);
 
-                if(DEBUG> 1) std::cout << "DIRECTIVE BEFORE SPE : " << s_tmp << std::endl;
-                loop->add_directive(s_tmp);
+                if(DEBUG) std::cout << "DIRECTIVE BEFORE SPE : " << s_tmp << std::endl;
 
+                loop->add_directive(s_tmp);
                 vec_vs_tmp.push_back(vs_tmp);
+
                 // The specialization will check directive above the loop and apply them if corresponding, that why we create and added the directive previously 
                 loop->specialize(vec_vs_tmp);
                 trans = true;
-              } else {
+              } else { // Don't know when exactly apply this
                 // Currently, 4 is the only available value for the generic short vecto
                 loop->shortVectoGen(4); 
                 //Should be replace by
@@ -358,13 +394,14 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
             }
           } else {
             //TODO: check if bounds are smalls
-            // loop->shortVecto();
+            loop->shortVecto();
+            trans = true;
           }
         }
 
         //DECAN  
-        if (pi[i].dl1_ratio_avg > DL1_RATIO_MIN_TO_TILE && trans) {
-          if (VERBOSE > 1 || DEBUG) std::cout << "Average ORIG/DL1 ratio is equals to "<< pi[i].dl1_ratio_avg << std::endl;
+        if (pi[i].dl1_ratio_mean > DL1_RATIO_MIN_TO_TILE && !trans) {
+          if (VERBOSE > 1 || DEBUG) std::cout << "Average ORIG/DL1 ratio is equals to "<< pi[i].dl1_ratio_mean << std::endl;
           
           std::string directive = "MAQAO TILE";
           int tileSize = 8; //by default BUT we have to change
@@ -407,7 +444,7 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
 
     if(returnID && VERBOSE)
     std::cout << "Error during the backend, the return status is : " << returnID << std::endl;  
-    if (VERBOSE) std::cout << "--------------------------------------------" << std::endl;
+    //if (VERBOSE) std::cout << "--------------------------------------------" << std::endl;
 
     return returnID;
   }
@@ -418,6 +455,8 @@ bool vprof_lct (profilerLoopInfo* pi, Loop* loop) {
   if (DEBUG) std::cout << "Loop count transformation " << std::endl;
   //If we didn't have any transformation to perform, so just insert LOOP COUNT transfo
   std::string directive ="";
+  if (pi->nb_ite_min == -1 || pi->nb_ite_max == -1 || pi->nb_ite_avg == -1) return false;
+
   if (currentFileType == "cpp") {
     directive += "loop_count min="+s2s_api::itoa(pi->nb_ite_min)+" max="+s2s_api::itoa(pi->nb_ite_max)+" avg="+s2s_api::itoa(pi->nb_ite_avg);
   } else {
@@ -667,7 +706,8 @@ void applyOptions(int numberOfOptions, char** options, SgProject* project, SgGlo
     else if(opt.find ("apply-directives") != std::string::npos) {
       if (DEBUG) DBG_MAQAO
       apply_directives = true;
-    } else if (opt.find ("test") != std::string::npos) {
+    } 
+    else if (opt.find ("test") != std::string::npos) {
       if (DEBUG) {std::cout << "We are in TEST  : "; DBG_MAQAO}
     }
   }

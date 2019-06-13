@@ -37,6 +37,10 @@ ASTFunction::ASTFunction(SgSourceFile* file) {
       SgFunctionDefinition *defn = func->get_definition();
       if (defn == NULL)
         continue;
+
+      //Avoid overload function not known that make Rose crash.
+      if (func->get_name().getString() == "operator<<") continue;
+
       Function * new_func  = new Function(defn);
       internalFunctionsList.push_back(new_func);
     }
@@ -78,6 +82,12 @@ ASTFunction::ASTFunction(SgGlobal* root):root(root) {
       SgFunctionDefinition *defn = func->get_definition();
       if (defn == NULL)
         continue;
+
+      //Avoid overload function not known that make Rose crash.
+      // C++ special management
+      if (func->get_name().getString() == "operator<<") continue;
+
+      if(DEBUG) std::cout << "Record " << func->get_name().getString() << " in our function tree" << std::endl;
       Function * new_func  = new Function(defn);
       internalFunctionsList.push_back(new_func);
     }
@@ -200,7 +210,7 @@ Function::Function(SgFunctionDefinition* f): function(f) {
     body_without_trans = NULL;
   }
 
-  if( SgProcedureHeaderStatement* procedureHeader = isSgProcedureHeaderStatement(f)) {
+  if(SgProcedureHeaderStatement* procedureHeader = isSgProcedureHeaderStatement(f)) {
     if (procedureHeader->isFunction() == true) {
       set_functionType(FUNCTION);
     } else if (procedureHeader->isSubroutine() == true) {
@@ -210,6 +220,7 @@ Function::Function(SgFunctionDefinition* f): function(f) {
     }
   }else {
     if (DEBUG) DBG_MAQAO
+    if (DEBUG) std::cout << "[New Function]: Class of the function defintion is: " << f->class_name() << std::endl;
   }
   is_matching = false;
 }
@@ -368,8 +379,9 @@ void Function::add_directive(std::string directive) {
 
 bool Function::apply_directive() {
   if (DEBUG) DBG_MAQAO 
-  if (s2s_api::isFortranFile(s2s_api::getEnclosingsourceFile_RosePtr(function)->getFileName ())) {
-    
+  
+  //if (s2s_api::isFortranFile(s2s_api::getEnclosingsourceFile_RosePtr(function)->getFileName ())) {
+  if (currentFileType == "fortran") {   
     std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(function->get_declaration());
 
     if (maqaoDir.size() != 0) {
@@ -393,11 +405,12 @@ bool Function::apply_directive() {
   } else { //C/C++
 
     if (VERBOSE > 1 ||  DEBUG) {
+      std::cout << "C/C++ file named "<< s2s_api::getEnclosingsourceFile_RosePtr(function)->getFileName () << std::endl;
       std::cout << "Function name : "<< get_name() << " "; printLines();      
       SgStatement* previousstmt = SageInterface::getPreviousStatement(function);
-      if (DEBUG > 1) std::cout << "previous stmt : " << previousstmt->class_name() << std::endl;
+      if (DEBUG) std::cout << "previous stmt : " << previousstmt->class_name() << std::endl;
       previousstmt = SageInterface::getPreviousStatement(previousstmt);
-      if (DEBUG > 1)std::cout << "previous previous stmt : " << previousstmt->class_name() << std::endl;
+      if (DEBUG)std::cout << "previous previous stmt : " << previousstmt->class_name() << std::endl;
     }
 
     int error = 0;
@@ -845,7 +858,7 @@ void Function::specialize_v2(std::vector<variable_spe*> var, bool create_call) {
 
     // Build the return statement
     SgStatement * true_body  = NULL; 
-    if (s2s_api::isFortranFile(s2s_api::getEnclosingsourceFile_RosePtr(function)->getFileName ())) {
+    if (currentFileType == "fortran") {
       true_body  = SageBuilder::buildBasicBlock(
         SageBuilder::buildExprStatement(func_call), 
         SageBuilder::buildReturnStmt (SageBuilder::buildNullExpression ()));
@@ -892,7 +905,7 @@ bool Function::modify_prefetch(std::string config) {
 
   //prefetch is the name of the function
   std::string prefetch_func_name = "prefetch";
-  if (s2s_api::isCCXXFile(s2s_api::getEnclosingsourceFile_RosePtr(function)->getFileName ())) {
+  if (currentFileType == "c" || currentFileType == "cpp") {
     prefetch_func_name = "prefetch_";
   }
   

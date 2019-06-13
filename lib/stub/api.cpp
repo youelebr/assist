@@ -128,7 +128,7 @@ std::vector<std::string> get_comment_and_directives(SgStatement * astNode) {
       directive_list.push_back((*i)->getString());
     }
     // Directives for C/C++ are not handle as comments but as pragmas
-    if (s2s_api::isCCXXFile(s2s_api::getEnclosingsourceFile_RosePtr(astNode)->getFileName ())) {
+    if (currentFileType == "c" || currentFileType == "cpp") {
       SgPragmaDeclaration* dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(isSgStatement(astNode)));
       while (dir) {
         directive_list.push_back(dir->get_pragma()->get_pragma());
@@ -684,14 +684,15 @@ std::string itoa(int i) {
 //////////////////////////
 void browseFile_and_apply_directives(SgGlobal* globalScope) {
   if (DEBUG) DBG_MAQAO
-  if (VERBOSE || DEBUG) std::cout << "--- APPLY DIRECTIVES ON FUNCTIONS ---" << std::endl;
+  if (DEBUG) std::cout << "--- APPLY DIRECTIVES ON FUNCTIONS ---" << std::endl;
   SgFunctionDeclaration* funcDecl = SageInterface::findFirstDefiningFunctionDecl(globalScope);
 
   while (funcDecl) {
     // No need to anlayze function we had created 
     // (and it avoid to crash due to the deepCopyNode function which not accept transformed nodes
     // (it should miss some information))
-    if (!funcDecl->get_file_info()->isTransformation()) {
+    // /!\ Avoid template functions because they are not handled by Rose
+    if (!funcDecl->get_file_info()->isTransformation() && !isSgTemplateInstantiationMemberFunctionDecl(funcDecl)) {
       Function * func  = new Function(funcDecl->get_definition());
       func->apply_directive();
     }
@@ -703,7 +704,7 @@ void browseFile_and_apply_directives(SgGlobal* globalScope) {
     if (DEBUG && nextStmt) std::cout << nextStmt->class_name() << std::endl;
   }
 
-  if(VERBOSE || DEBUG) std::cout << "--- APPLY DIRECTIVES ON LOOPS ---" << std::endl;
+  if(DEBUG) std::cout << "--- APPLY DIRECTIVES ON LOOPS ---" << std::endl;
   ASTRoot astL(globalScope);
   astL.apply_directive();
 }
@@ -901,7 +902,7 @@ SgBinaryOp * myBuildBinOp(SgExpression * var, SgExpression * incr, int op,  bool
 }
 
 bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * newExpr) {
-  if(DEBUG > 2) DBG_MAQAO
+  if(DEBUG > 1) DBG_MAQAO
   if(!body) {return false;}
   
   SgStatementPtrList & stmtsList = body->get_statements();
@@ -1014,18 +1015,26 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
         return false;
         break;
       }
-      case V_SgExprStatement : {
-        if(SgExprStatement * expr = isSgExprStatement(stmtsList[i])) { 
-          replace_expr(expr->get_expression(), var, newExpr); 
-        }
-        break;
-      }
       case V_SgVariableDeclaration: {
         replace_expr(isSgVariableDeclaration(stmtsList[i])->get_definition()->get_vardefn ()->get_initializer (), var, newExpr); 
         break;
       }
+      case V_SgPrintStatement: {
+        SgExprListExp * printExpList = isSgPrintStatement(stmtsList[i])->get_io_stmt_list ();
+        SgExpressionPtrList &  expList = printExpList->get_expressions ();
+        for (int i=0; i < expList.size(); i++) {
+          replace_expr(expList[i], var, newExpr); 
+        }
+        break;
+      }
       case V_SgContinueStmt:
       case V_SgPragmaDeclaration: {
+        break;
+      }
+      case V_SgExprStatement : {
+        if(SgExprStatement * expr = isSgExprStatement(stmtsList[i])) { 
+          replace_expr(expr->get_expression(), var, newExpr); 
+        }
         break;
       }
       default: {
@@ -1046,6 +1055,7 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
 bool replace_expr (SgExpression* expstmt, SgVariableSymbol * var, SgExpression * newExpr) {
   if(DEBUG > 1) DBG_MAQAO
   if(!expstmt) return false;
+  if (newExpr == expstmt->get_parent()) return false;
   
   // CALL stmt
   if (SgFunctionCallExp * fcallexp = isSgFunctionCallExp(expstmt)) {
@@ -1121,7 +1131,7 @@ bool replace_expr (SgExpression* expstmt, SgVariableSymbol * var, SgExpression *
 }
 
 bool replace_expr (SgBinaryOp* bo, SgVariableSymbol * var, SgExpression * newExpr) {
-  if(DEBUG > 2) DBG_MAQAO
+  if(DEBUG > 1) DBG_MAQAO
   if (!bo) return false;
   SgExpression * lhs, * rhs;
   lhs = bo->get_lhs_operand();

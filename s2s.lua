@@ -841,13 +841,24 @@ function s2s:s2s_launch (args, aproject)
         sub_oneview_array[nbOfInfo].lineStart      = oneview_array[ite].lineStart
         sub_oneview_array[nbOfInfo].lineStop       = oneview_array[ite].lineStop
         sub_oneview_array[nbOfInfo].label          = nil
-        sub_oneview_array[nbOfInfo].vec_ratio      = oneview_array[ite].vecRatio
-        sub_oneview_array[nbOfInfo].dl1_ratio_min  = oneview_array[ite].r_l1_min
-        sub_oneview_array[nbOfInfo].dl1_ratio_max  = oneview_array[ite].r_l1_max
-        sub_oneview_array[nbOfInfo].dl1_ratio_avg  = oneview_array[ite].r_l1_med
-        sub_oneview_array[nbOfInfo].nb_ite_min     = oneview_array[ite].ite_min
-        sub_oneview_array[nbOfInfo].nb_ite_max     = oneview_array[ite].ite_max
-        sub_oneview_array[nbOfInfo].nb_ite_avg     = s2s:round(oneview_array[ite].ite_avg)
+        if oneview_array[ite].vecRatio ~= nil then
+          sub_oneview_array[nbOfInfo].vec_ratio      = oneview_array[ite].vecRatio
+        else 
+          sub_oneview_array[nbOfInfo].vec_ratio      = -1
+        end
+
+        sub_oneview_array[nbOfInfo].dl1_ratio_min  = oneview_array[ite].dl1_ratio_min
+        sub_oneview_array[nbOfInfo].dl1_ratio_max  = oneview_array[ite].dl1_ratio_max
+        sub_oneview_array[nbOfInfo].dl1_ratio_mean  = oneview_array[ite].dl1_ratio_mean
+        if (oneview_array[ite].ite_min ~= nil) then
+          sub_oneview_array[nbOfInfo].nb_ite_min     = oneview_array[ite].ite_min
+          sub_oneview_array[nbOfInfo].nb_ite_max     = oneview_array[ite].ite_max
+          sub_oneview_array[nbOfInfo].nb_ite_avg     = s2s:round(oneview_array[ite].ite_avg)
+         else
+          sub_oneview_array[nbOfInfo].nb_ite_min     = -1
+          sub_oneview_array[nbOfInfo].nb_ite_max     = -1
+          sub_oneview_array[nbOfInfo].nb_ite_avg     = -1
+        end
         
         if (ite >= table.getn(oneview_array)) then break end
       until (input ~= oneview_array[ite+1].file)
@@ -903,6 +914,8 @@ function s2s:s2s_launch (args, aproject)
           --The file will be renamed as originally
           os.execute("mv "..outputprefix..file .." "..path..file )
         end
+        
+        if (path == nil ) then path = "./" end
 
         Message:info ("-> ... FINISH TRANSFORMATIONS on "..path..outputprefix..filename)
         print ("")

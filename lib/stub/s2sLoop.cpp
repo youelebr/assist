@@ -959,20 +959,30 @@ void Loop::add_directive(std::string directive) {
 }
 
 void Loop::apply_directive() {
-  if(DEBUG) DBG_MAQAO
+  if (DEBUG) DBG_MAQAO
   if (alreadyTransformed()) return;
 
-  if (currentFileType == "fortran") {
-    std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
+  if (DEBUG) {
+    std::cout << "loop line : "<< get_line_start() << std::endl;
+    std::cout << "previous stmt : " << SageInterface::getPreviousStatement(loop)->class_name() << std::endl;
+    std::cout << "Comment above the loop : " << std::endl;
+    std::vector<std::string> comment_list = s2s_api::get_comment_and_directives(loop);
+    for (int i=0; i < comment_list.size(); i++) {
+      std::cout << " " << comment_list[i] << std::endl;
+    }
+  }
 
+  if (currentFileType == "fortran") {
+    if(DEBUG) DBG_MAQAO
+    std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
     for (int i=0; i < maqaoDir.size(); i++) {
 
       int error = 0;
       std::string directive = maqaoDir[i];
-      if (VERBOSE > 1 || DEBUG) { std::cout << "[fortran - nospe] directive found : " << directive << std::endl; }
+      if (DEBUG) { std::cout << "[fortran - nospe] directive found : " << directive << std::endl; }
 
       if (directive.find("IF_SPE_") != std::string::npos) {
-            int pos_last_char = std::string::npos;
+        int pos_last_char = std::string::npos;
 
         pos_last_char = directive.find_last_of('=');
         if(pos_last_char == std::string::npos) 
@@ -994,6 +1004,7 @@ void Loop::apply_directive() {
           directive.erase(idx, 7+spe.length());
         } else {
           if(DEBUG) std::cout << "We are not in the right function" << std::endl;
+          s2s_api::remove_MAQAO_directives(loop, directive);
           continue;
         }
     
@@ -1003,7 +1014,7 @@ void Loop::apply_directive() {
       } else if (directive.find("MAQAO LABEL LOOP") != std::string::npos){
         if(DEBUG) std::cout << "We found a MAQAO LABEL LOOP" << std::endl;
         return;
-      } else { // Si ce n'est pas une directive pour une fonction spécialisé 
+      } else { // Si ce n'est pas une directive pour une fonction spécialisée 
         // alors ne pas appliquer cette directive dans les fonctions générées par ASSIST 
         // (car ce sont des fonctions spécialisées)
         
@@ -1013,35 +1024,13 @@ void Loop::apply_directive() {
           continue;
         }
       }
-      s2s_api::remove_MAQAO_directives(loop, directive);
+      //s2s_api::remove_MAQAO_directives(loop, directive);
       apply_directive(directive);
-      if (loop) s2s_api::remove_MAQAO_directives(loop);
+      //if (loop) s2s_api::remove_MAQAO_directives(loop);
       return;
     }
   } else { //C/C++, all have to be done in get_MAQAO_directives
-
-    if (VERBOSE) {
-      std::cout << "loop line : "<< get_line_start() << std::endl;
-      std::cout << "previous stmt : " << SageInterface::getPreviousStatement(loop)->class_name() << std::endl;
-      std::cout << "Comment above the loop : " << std::endl;
-      std::vector<std::string> comment_list = s2s_api::get_comment_and_directives(loop);
-      for (int i=0; i < comment_list.size(); i++) {
-        std::cout << " " << comment_list[i] << std::endl;
-      }
-      std::cout << "getAttachedPreprocessingInfo : " << std::endl;
-      AttachedPreprocessingInfoType *comments = loop->getAttachedPreprocessingInfo ();
-
-        AttachedPreprocessingInfoType::iterator i;
-        if (comments)
-        std::cout << "size = "<< comments->size() << std::endl;
-      else 
-        std::cout << "coments empty " << std::endl;
-        for (i = comments->begin (); i != comments->end (); i++)
-        {
-            std::cout << "directive : " << (*i)->getString ().c_str () << std::endl;
-        }
-    }
-
+    if(DEBUG) DBG_MAQAO
     SgPragmaDeclaration* dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(loop));    
 
     while (dir) {
@@ -1076,17 +1065,15 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
   if(DEBUG) DBG_MAQAO
   if (alreadyTransformed()) return;
   if (currentFileType == "fortran") {
-    AttachedPreprocessingInfoType* dir = loop->getAttachedPreprocessingInfo();
-    if(dir) {
-      AttachedPreprocessingInfoType::iterator it;
-      int error = 0;
-      // for (int it=0; it < dir->size(); it++) {
-      for (it = dir->begin(); it != dir->end();) {
-        if (!(*it)) break;
+    std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
 
-        int pos = (*it)->getString().find ("!DIR$ MAQAO");
+    if (maqaoDir.size() != 0) {
+
+      int error = 0;
+      for (int i=0; i < maqaoDir.size(); i++) {
+        int pos = maqaoDir[i].find ("!DIR$ MAQAO");
         if(pos != std::string::npos) {
-          std::string directive = (*it)->getString().substr(pos);
+          std::string directive = maqaoDir[i].substr(pos);
 
           if (DEBUG) { std::cout << "[fortran - varspe] directive found : " << directive << std::endl; }
 
@@ -1105,12 +1092,12 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
             else {
               // Découpage de la directive pour récupérer les données
               bool right_specialization = false;
-
-              int postruc = s2s_api::find_first_number(spe.substr(0,spe.find_first_of('_')-1).c_str());
-
-              std::string varname = spe.substr(0, postruc-1).c_str();
-              std::string compareType = spe.substr(spe.find (varname)+varname.size()-1, 1).c_str();
-              std::string varvalue = spe.substr(postruc).c_str();
+              int firstnumber = s2s_api::find_first_number(spe.substr(0,spe.find_first_of('_')).c_str());
+              
+              std::string varname = spe.substr(0, firstnumber-1).c_str();
+              std::string compareType = spe.substr(spe.find (varname)+varname.size(), 1).c_str();
+              
+              std::string varvalue = spe.substr(firstnumber,spe.find_first_of('_')-firstnumber).c_str();
 
               for (int i= 0; i < varspe.size(); i++) {
                 if (varspe[i]->var_name == varname) {
@@ -1154,33 +1141,19 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
               if (right_specialization) {
                 int idx = directive.find("IF_SPE_");
                 directive.erase(idx, 7+varname.size()+1+varvalue.size()+1);
-              } else if (*it) {
-                it++;
-                // it = dir->erase(it);
-                continue;
-
-              } else {
+              } else {              
+                s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
                 continue;
               }
             } // end if index!= func.find(spe) ... else ...
           } else {
-            // This function 
-            if (*it) {
-              it++;
-              // it = dir->erase(it);
-            }
+            s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
             continue;
           }
-          if (*it) {
-            it++;
-            // it = dir->erase(it); 
-          }
+          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
+
           apply_directive(directive, &varspe);
-          // return;
-          
-        } else {
-          it++;
-        }
+        } 
       }
     }
   } else { //C/C++
@@ -1189,12 +1162,14 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
       std::cout << "previous stmt : " << SageInterface::getPreviousStatement(loop)->class_name() << std::endl;
     }
 
-    SgPragmaDeclaration* dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(loop));
-    while (dir) {
-      int pos = dir->get_pragma()->get_pragma().find ("MAQAO");
+    std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
+
+    int error = 0;
+    for (int i=0; i < maqaoDir.size(); i++) {
+      int pos = maqaoDir[i].find ("MAQAO");
       if(pos != std::string::npos) {
-        std::string directive = dir->get_pragma()->get_pragma().substr(pos);
-        if (VERBOSE > 1 || DEBUG) { std::cout << "[c - varspe] directive found : " << directive << std::endl; }
+        std::string directive = maqaoDir[i].substr(pos);
+        if (DEBUG) { std::cout << "[c - varspe] directive found : " << directive << std::endl; }
 
         if (directive.find("IF_SPE_") != std::string::npos) {
           //TODO Check if information in varspe corresponding to the directive
@@ -1279,28 +1254,30 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
               int idx = directive.find("IF_SPE_");
               directive.erase(idx, 7+directive.find(' '));
             } else {
-              SgPragmaDeclaration* dir2 = dir;
-              dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+              // SgPragmaDeclaration* dir2 = dir;
+              // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
               // SageInterface::removeStatement (dir2, true);
               continue;
             }
           }
         } else {  
-          SgPragmaDeclaration* dir2 = dir;
-          dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-          SageInterface::removeStatement (dir2, true);
+          // SgPragmaDeclaration* dir2 = dir;
+          // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+          //SageInterface::removeStatement (dir2, true);
+          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
           continue;
         }
        
-        SgPragmaDeclaration* dir2 = dir;
-        dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-        SageInterface::removeStatement (dir2, true);
+        // SgPragmaDeclaration* dir2 = dir;
+        // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+        // SageInterface::removeStatement (dir2, true);
 
+        s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
         apply_directive(directive, &varspe);
 
         return;
       } else {
-        dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+        // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
         continue;
       }
     }
@@ -1346,7 +1323,7 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
     }
 
     int unrollSize = atoi(directive.substr(directive.find ('=')+1,directive.find (' ')-1).c_str());
-    bool reminderLoop = (directive.find("UNROLL") != std::string::npos) ? true : false;
+    bool reminderLoop = (directive.find("UNROLL_AND_JAM") != std::string::npos) ? true : false;
     if (unroll(unrollSize,reminderLoop)) {
       // if (LOG) {s2s_api::log("In "+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithPath ()+"\nThe loop line "+s2s_api::itoa(get_line_start())+"-"+s2s_api::itoa(get_line_end())+" was unrolled with succes.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithoutPath ()+".log");}
       if (LOG) {s2s_api::log("["+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithPath ()+" l:"+s2s_api::itoa(get_line_start())+"-"+s2s_api::itoa(get_line_end())+"] unroll - success", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithoutPath ()+".log");}
@@ -1358,18 +1335,23 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
     }
   }
   else if (directive.find("INTERCHANGE")!= std::string::npos) {
-    size_t depth=2;
+    size_t depth=2;    
+    size_t first=1;
     size_t lexicoOrder=1;
     SgStatement* parent = isSgStatement(loop->get_parent());
 
     std::string errorMSG = "Sorry we can't be able to determine the depth, thank you to provide information with the following directive : $DIR MAQAO INTERCHANGE=<depth>(,<lexicoOrder>) ";
     
     if (directive.find ('=') != std::string::npos) {
-      depth = atoi(directive.substr(directive.find ('=')+1,directive.find (',')-1).c_str());
+      first = atoi(directive.substr(directive.find ('=')+1,directive.find (',')-1).c_str());
       if (directive.find (',') != std::string::npos )
-        lexicoOrder = atoi(directive.substr(directive.find (',')+1, directive.find (' ')-1).c_str());
+        depth = atoi(directive.substr(directive.find (',')+1, directive.find (' ')-1).c_str());
     }
-
+    if (first != 1) {
+      std::cout << "If you want to interchange loops please add the directive above the loop you want to interchange." << std::endl; 
+      if (LOG) { s2s_api::log("["+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithPath ()+" l:"+s2s_api::itoa(get_line_start())+"-"+s2s_api::itoa(get_line_end())+"] interchange - failed - the first number must be 1, other cases are not handled yet. $DIR$ MAQAO INTERCHANGE=1,2 for exmaple.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log"); }
+      return false;
+    }
     // Erase all directive tagged as MAQAO directives
     s2s_api::remove_MAQAO_directives(loop);
     // Start the interchange transformation
@@ -1649,6 +1631,7 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
 }
 
 bool Loop::hasFixBounds() {
+  if(DEBUG) DBG_MAQAO
   if (SgFortranDo * fortranloop = isSgFortranDo(loop)) {
     if ( isSgIntVal(isSgBinaryOp(fortranloop->get_initialization())->get_rhs_operand())
       && isSgIntVal((fortranloop->get_bound()))) {
@@ -1657,6 +1640,8 @@ bool Loop::hasFixBounds() {
   } else if (SgForStatement* forloop = isSgForStatement(loop)) {
 
     std::cout << "C \"for\" loops are not handle yet" << std::endl;
+  } else {
+    if (DEBUG) std::cout << "This loop type is not handle." << std::endl;
   }
   return false;
 }
@@ -1690,7 +1675,7 @@ bool Loop::unroll(size_t unrollSize, bool reminder/*=false*/) {
   if (LOG){ s2s_api::log("In "+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+"\nUnroll Transformation", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log"); }
 
   if (isSgForStatement(loop)) {
-    forLoopUnroll(isSgForStatement(loop), 0, unrollSize);
+    forLoopUnroll(isSgForStatement(loop), 0, unrollSize, reminder);
   }
   else if (SgFortranDo * fdo = isSgFortranDo(loop)) {
     SgNode * parent = fdo->get_parent();
@@ -1698,9 +1683,10 @@ bool Loop::unroll(size_t unrollSize, bool reminder/*=false*/) {
     SgFortranDo * reminderLoop = isSgFortranDo(SageInterface::copyStatement(fdo));
 
     s2s_api::remove_MAQAO_directives(reminderLoop);
+
     loopCopy->set_parent(parent);
     
-    loopCopy = loopUnroll(loopCopy, unrollSize);
+    loopCopy = loopUnroll(loopCopy, unrollSize, reminder);
     if(!loopCopy)  {
       s2s_api::log("In "+ s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+ "\nLoop l." + get_line_start_str() + " was not unrolled ", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
     } else if (reminder) {
@@ -1764,11 +1750,11 @@ bool Loop::fullUnroll(size_t unrollSize) {
         if (SgIntVal* bound_val = s2s_api::trace_back_to_last_affectation(vre)) {
           unrollSize = bound_val->get_value();
         } else {
-          if (VERBOSE) std::cout << errorMSG << std::endl;
+          if (DEBUG) std::cout << errorMSG << std::endl;
           return false;
         }
       } else {
-        if (VERBOSE) std::cout << errorMSG << std::endl;
+        if (DEBUG) std::cout << errorMSG << std::endl;
         return false;
       }
     }
@@ -1828,23 +1814,23 @@ bool Loop::fullUnroll(size_t unrollSize) {
     if (SgUnaryOp* uop = isSgUnaryOp(forloop->get_increment ())) {
       if (!isSgPlusPlusOp(uop)) {
         if (LOG) s2s_api::log("Cannot transform this loop due to its incrementation (it must be i++ or ++i) .", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
-      return false;
+        return false;
       }
     }
+
     if (forloop->get_for_init_stmt()->get_init_stmt ().size() > 1) {
       if (LOG) s2s_api::log("Cannot transform this loop due to its a non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
       return false;
-    } else {
-      if ((init_binop = isSgBinaryOp(forloop->get_for_init_stmt()->get_init_stmt()[0]))) { }
-      else if (isSgExprStatement(forloop->get_for_init_stmt()->get_init_stmt()[0])) {
-        if (init_binop = isSgBinaryOp(isSgExprStatement(forloop->get_for_init_stmt()->get_init_stmt()[0])->get_expression())) { }
-        else {
-          if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
-          return false;
-        }
-      }
-      var = isSgVarRefExp(init_binop->get_lhs_operand())->get_symbol();
+    } 
+
+    SgExpression    * increment= forloop->get_increment();
+    SgVarRefExp * incrementVar = NULL;
+    if(isSgUnaryOp(increment)) {
+      incrementVar = isSgVarRefExp(isSgUnaryOp(increment)->get_operand ());
+    } else { 
+      incrementVar = isSgVarRefExp(isSgBinaryOp(increment)->get_lhs_operand());
     }
+    var = incrementVar->get_symbol();
 
     int start = 0;
     newBody->set_parent(forloop->get_parent());
@@ -1944,17 +1930,32 @@ bool Loop::fullUnroll(size_t unrollSize) {
     }
 
     /****** START ******/
-    if (SgIntVal* intvalue = isSgIntVal(init_binop->get_rhs_operand())) {
-      start = intvalue->get_value();
+    if (init_binop = isSgBinaryOp(forloop->get_for_init_stmt()->get_init_stmt()[0])) {
+      if (SgIntVal* intvalue = isSgIntVal(init_binop->get_rhs_operand())) {
+        start = intvalue->get_value();
+      } else {
+        if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+        return false;
+      }   
+    } else if (SgVariableDeclaration* initVarDecl = isSgVariableDeclaration(forloop->get_for_init_stmt()->get_init_stmt()[0])) {
+      if (SgAssignInitializer* assign = isSgAssignInitializer(initVarDecl->get_definition()->get_vardefn ()->get_initializer ())) {
+        if (SgIntVal* intvalue = isSgIntVal(assign->get_operand_i())) {
+          start = intvalue->get_value();
+        } else {
+          if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+          return false;
+        }  
+      }
     } else {
-      if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
-      return false;
-    }
+        std::cout << "Error: the init format ("<< forloop->get_for_init_stmt()->get_init_stmt()[0]->class_name() <<")of the loop is not managed" << std::endl;
+        if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+        return false;
+      }  
 
     /*******************
     **   FULLUNROLL   **
     ********************/
-    if (VERBOSE) std::cout << "Unroll from " << start << "to " << unrollSize << std::endl;
+    if (DEBUG) std::cout << "Unroll from " << start << " to " << unrollSize << std::endl;
     for(int i=start; i < start+unrollSize; ++i) {
       SgBasicBlock * body_copy = isSgBasicBlock(SageInterface::copyStatement(original_body));
       s2s_api::constantPropagation (body_copy, var, i);
@@ -2244,6 +2245,7 @@ bool Loop::tile_inner_v2(size_t tileSize) {
     SgFortranDo* control_loop = new SgFortranDo(init_stmt, ub, incr_exp, SageBuilder::buildBasicBlock());
     SgBinaryOp* cond = SageBuilder::buildAddOp(SageBuilder::buildVarRefExp(ivar2_name,scope), SageBuilder::buildSubtractOp(SageInterface::copyExpression(incr_exp),SageBuilder::buildIntVal(1)));
     isSgFortranDo(target_loop)->set_bound(cond);
+
     cond->set_parent(loop);
     // ----------------
     // Control bound and loop
@@ -2335,19 +2337,44 @@ bool Loop::shortVecto (bool useAVX) {
       }
     }
 
-    nbOfIteration = isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_test())->get_expression())->get_rhs_operand())->get_value();
+    if (isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_test())->get_expression())->get_rhs_operand())){
+      nbOfIteration = isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_test())->get_expression())->get_rhs_operand())->get_value();
+    } else if (isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_test())->get_expression())->get_lhs_operand())) {
+      nbOfIteration = isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_test())->get_expression())->get_rhs_operand())->get_value();
+    } else {
+      if (LOG) s2s_api::log("The loop is not cannonical.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+      return false; 
+    }
+
     // if the condition is <= add one to the number of iterations
-    if (isSgLessOrEqualOp(isSgExprStatement(floop->get_for_init_stmt()->get_init_stmt()[0])->get_expression())) {
+    if (isSgLessOrEqualOp(isSgExprStatement(floop->get_test())->get_expression())) {
       nbOfIteration++;
     }
 
-    if(isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_for_init_stmt()->get_init_stmt()[0])->get_expression())->get_rhs_operand())) {
-      start = isSgIntVal(isSgBinaryOp(isSgExprStatement(floop->get_for_init_stmt()->get_init_stmt()[0])->get_expression())->get_rhs_operand())->get_value();
-      nbOfIteration -= start;
+    // Get the start value
+    if (SgBinaryOp* init_binop = isSgBinaryOp(floop->get_for_init_stmt()->get_init_stmt()[0])) {
+      if (SgIntVal* intvalue = isSgIntVal(init_binop->get_rhs_operand())) {
+        start = intvalue->get_value();
+      } else {
+        if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+        return false;
+      }   
+    } else if (SgVariableDeclaration* initVarDecl = isSgVariableDeclaration(floop->get_for_init_stmt()->get_init_stmt()[0])) {
+      if (SgAssignInitializer* assign = isSgAssignInitializer(initVarDecl->get_definition()->get_vardefn ()->get_initializer ())) {
+        if (SgIntVal* intvalue = isSgIntVal(assign->get_operand_i())) {
+          start = intvalue->get_value();
+        } else {
+          if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+          return false;
+        }  
+      }
     } else {
-      if (LOG) s2s_api::log("The loop is not cannonical (initialization).", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
+      std::cout << "Error: the init format ("<< floop->get_for_init_stmt()->get_init_stmt()[0]->class_name() <<")of the loop is not managed" << std::endl;
+      if (LOG) s2s_api::log("Cannot transform this loop due to its non cannonical initialization.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");
       return false;
-    }
+    }  
+
+    nbOfIteration -= start;
 
     // If the bound respect some conditions
     if( ! (nbOfIteration < MAXBOUNDFORPOORVEC && nbOfIteration > 2 ) ) {
@@ -2361,11 +2388,20 @@ bool Loop::shortVecto (bool useAVX) {
 
     // if nbOfIteration == 6/7
     if ( nbOfIteration >= 6 ) {
-      SgVarRefExp * incrementVar;
-      incrementVar = isSgVarRefExp(isSgBinaryOp(isSgExprStatement(floop->get_for_init_stmt()->get_init_stmt()[0])->get_expression())->get_lhs_operand());
-      ROSE_ASSERT(incrementVar);
-      // split de la boucle en 2 boucles :
-      
+      SgExpression    * increment= floop->get_increment();
+      SgVarRefExp * incrementVar = NULL;
+      if(isSgUnaryOp(increment)) {
+        incrementVar = isSgVarRefExp(isSgUnaryOp(increment)->get_operand ());
+      } else { 
+        incrementVar = isSgVarRefExp(isSgBinaryOp(increment)->get_lhs_operand());
+      }
+      if (!incrementVar) {
+        if (LOG) {std::string msg = "Something wrong with the number of iteration, as reminder, the max number of iteration authorized for the bloc vectorization transformation is 7 and the minimum is 3."; s2s_api::log(msg, "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log");}
+        return false;
+      }
+
+
+      // split de la boucle en 2 boucles 
       // l'une de 4 iterations
       SgStatement* newTest = SageBuilder::buildExprStatement(SageBuilder::buildLessOrEqualOp(incrementVar, SageBuilder::buildIntVal(start+4)));
       floop->set_test (newTest);
@@ -3018,9 +3054,9 @@ bool Loop::specialize(std::vector<variable_spe*> var) {
   isSgBasicBlock(false_body)->set_symbol_table(isSgScopeStatement(loop_orig)->get_symbol_table());
   isSgBasicBlock(false_body)->get_symbol_table()->set_parent(false_body);
 
-  SageInterface::removeStatement(loop, true);
   s2s_api::copy_directives(ifstmt, loop_orig);
   s2s_api::copy_directives(ifstmt, loop_copy);
+  SageInterface::removeStatement(loop, false);
 
   s2s_api::remove_MAQAO_directives(ifstmt);
 
@@ -3407,16 +3443,15 @@ SgBasicBlock * unroll_body(SgBasicBlock * loopBody, SgVarRefExp * incrementVar, 
   }
 }
 
-bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize) {
+bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize, bool reminder) {
   if(DEBUG) DBG_MAQAO
   SgBasicBlock   * body ;
   SgStatement    * loopBody;
   SgForStatement * stmtLoop;
   bool goDeeper = false;
-  
+
   //DON'T CHECK DEEPER, TAKE THE FIRST LOOP AFTER THE PRAGMA
   nest=0;
-
   loopBody = loop->get_loop_body();
   while(nest > 0) {
     body = isSgBasicBlock(loopBody);
@@ -3444,37 +3479,34 @@ bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize) {
   }
 
   SgStatement * loopCopy = SageInterface::copyStatement(loop);
-  SgForStatement * loopUnrolled = loopUnroll(loop, unrollSize);
+  SgForStatement * loopUnrolled = loopUnroll(loop, unrollSize, reminder);
   if(loopUnrolled) {
-    SgIfStmt * newIfStmt;
-    SgForStatement * residue;
-    SgNode * parent = loop->get_parent();
-
-    residue = isSgForStatement(SageInterface::copyStatement(loopCopy));
-    newIfStmt = SageBuilder::buildIfStmt(SageBuilder::buildBoolValExp(true), loopUnrolled, loopCopy);
-    newIfStmt->set_parent(parent);
-    loopUnrolled->set_parent(newIfStmt);
-    loopCopy->set_parent(newIfStmt);
+      SgForStatement * residue;
+      SgNode * parent = loop->get_parent(); 
+      isSgStatement(parent)->replace_statement(loop,loopUnrolled);
+      
+      //Residue loop
+      if (reminder) {
+        loopCopy->set_parent(parent);
+        residue = isSgForStatement(SageInterface::copyStatement(loopCopy));
+        SageInterface::insertStatementAfter(loopUnrolled, residue);
+      }
     
-    SageInterface::insertStatementAfter(loopUnrolled, residue);
-    residue->set_parent(newIfStmt);
 
-    SgStatementPtrList& initPtrList = loopUnrolled->get_init_stmt();
+      SgStatementPtrList& initPtrList = loopUnrolled->get_init_stmt();
     
       //Add in the symbols table (in case of declaration type "int i")
       for (SgStatementPtrList::iterator p = initPtrList.begin(); p != initPtrList.end(); ++p) {
-      SgStatement * copyVarDecl = SageInterface::copyStatement(*p);
-        copyVarDecl->set_parent(newIfStmt);
-      SageInterface::insertStatementBefore(loopUnrolled, copyVarDecl);
+        SgStatement * copyVarDecl = SageInterface::copyStatement(*p);
+        copyVarDecl->set_parent(parent);
+        SageInterface::insertStatementBefore(loopUnrolled, copyVarDecl);
       }
       // /!\ BECAREFULL ! PROVISOIRE
       //TODO : n'effacer que les déclarations insérées avant la boucle
       //ERASE LAST DECLARATION FROM THE "FOR" UNROLLED STMT
       loopUnrolled->get_init_stmt().pop_back();
       //loopUnrolled->set_for_init_stmt(NULL);
-      residue->get_init_stmt().pop_back();  
-      isSgStatement(parent)->replace_statement(loop,newIfStmt);
-      return true;
+      if (reminder) residue->get_init_stmt().pop_back();  
   } else {
     if (VERBOSE || DEBUG) {
       std::cout << "The Loop\n";
@@ -3485,7 +3517,7 @@ bool forLoopUnroll(SgForStatement  * loop, size_t nest, size_t unrollSize) {
   }
 }
 
-SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize) {
+SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize, bool reminder) {
   if(DEBUG) DBG_MAQAO
   //Body
   SgStatement     * loopBody,  * loopBodyCopy;
@@ -3514,13 +3546,14 @@ SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize) {
   //****************************************
   //*               CONDITION              *
   //****************************************
-  newCondition = get_unroll_cond(loop, unrollSize-1);
-  if(newCondition) {
-   newTest = SageBuilder::buildExprStatement(newCondition);
-  }
-  else { 
-    return NULL;
-  }
+  if(reminder) {
+    if(newCondition = get_unroll_cond(loop, unrollSize-1)) {
+     newTest = SageBuilder::buildExprStatement(newCondition);
+    }
+    else { 
+     return NULL;
+    }
+  } else { newTest = SageBuilder::buildExprStatement(loop->get_test_expr()); }
 
   //****************************************
   //*            INITIALIZATION            *
@@ -3569,7 +3602,7 @@ SgForStatement * loopUnroll(SgForStatement  * loop, size_t unrollSize) {
   return newForLoop;
 }
 
-SgFortranDo * loopUnroll(SgFortranDo * loop, size_t unrollSize) {
+SgFortranDo * loopUnroll(SgFortranDo * loop, size_t unrollSize, bool reminder) {
   if(DEBUG) DBG_MAQAO
 
   if (!loop->get_has_end_statement ()) {
@@ -3623,7 +3656,7 @@ SgFortranDo * loopUnroll(SgFortranDo * loop, size_t unrollSize) {
   //*                BOUND                 *
   //****************************************
   SgExpression * boundExpr = loop->get_bound();
-  loop->set_bound(SageBuilder::buildSubtractOp (boundExpr,SageBuilder::buildIntVal(unrollSize-1)));
+  if (reminder) loop->set_bound(SageBuilder::buildSubtractOp (boundExpr,SageBuilder::buildIntVal(unrollSize-1)));
 
   //****************************************
   //*              BODY UNROLL             *
@@ -3734,6 +3767,8 @@ bool tile_fortran_do(SgFortranDo* loop,size_t tileSize) {
 
 
   SgBinaryOp* cond = SageBuilder::buildSubtractOp(SageBuilder::buildAddOp(SageBuilder::buildVarRefExp(ivar2_name,scope),SageInterface::copyExpression(incr_exp)), SageBuilder::buildIntVal(1));
+  
+
   cond->set_parent(loop);
   SageInterface::addTextForUnparser (cond_stmt, "min("+ub->unparseToString()+","+cond->unparseToString()+")", AstUnparseAttribute::e_before );
 

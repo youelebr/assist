@@ -215,7 +215,7 @@
 	  // DECAN
 	  float dl1_ratio_min;
 	  float dl1_ratio_max;
-	  float dl1_ratio_avg;
+	  float dl1_ratio_mean;
 	  // VPROF
 	  int nb_ite_min;
 	  int nb_ite_max;
