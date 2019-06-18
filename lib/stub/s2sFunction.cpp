@@ -774,8 +774,8 @@ void Function::specialize_v2(std::vector<variable_spe*> var, bool create_call) {
       }
   }
   if (!body_without_trans) {
-    if (LOG || VERBOSE) std::cout << "The function "<< function->get_declaration()->get_name()
-                    << " will not be specialize, because of the body, impossible to copy it."<< std::endl;
+    if (LOG || DEBUG) std::cout << "The function "<< function->get_declaration()->get_name()
+                    << " will not be specialize, because it is impossible to copy the body."<< std::endl;
     return;
   }
   //Build the new function
@@ -881,7 +881,6 @@ void Function::specialize_v2(std::vector<variable_spe*> var, bool create_call) {
       SageInterface::findLastDeclarationStatement(isSgScopeStatement(function->get_body())),
       ifstmt, 
       true);
-
   }
 
   // Propagate the constant throught the function copied and replace all call the de variable "v_symbol" by the value val
@@ -895,6 +894,10 @@ void Function::specialize_v2(std::vector<variable_spe*> var, bool create_call) {
 
   s2s_api::dead_code_elimination(copy_f_def->get_definition()->get_body(), var);
   if (LOG) s2s_api::log("["+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+" f: " + copy_f_def->get_name().getString ()+ "] DCE - success.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+".log");
+
+  //Apply directives on loops in the specialized body.
+  ASTRoot ASTLoops_inspefunc(copy_f_def->get_definition()->get_body());
+  ASTLoops_inspefunc.apply_directive(var);
 }
 
 bool Function::modify_prefetch(std::string config) {
@@ -1162,7 +1165,7 @@ void Function::specialize(std::vector<variable_spe*> var, bool create_call) {
     //The character '-' isn't valide for a function name, (i.e "x=-1")
     std::replace(ending_func_name.begin(), ending_func_name.end(), '-', 'm');
 
-    if (VERBOSE > 1) std::cout << "Searching : "<< function->get_declaration()->get_name().getString()+ending_func_name << std::endl;
+    if (DEBUG) std::cout << "Searching : "<< function->get_declaration()->get_name().getString()+ending_func_name << std::endl;
     SgFunctionSymbol * f_symbol  = gst->find_function(SgName(function->get_declaration()->get_name().getString()+ending_func_name));
     ROSE_ASSERT(f_symbol);
 
@@ -1215,4 +1218,9 @@ void Function::specialize(std::vector<variable_spe*> var, bool create_call) {
   s2s_api::dead_code_elimination(copy_f_def->get_definition()->get_body(), var);
   // if (LOG) s2s_api::log("In"+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+"\nDead code elimination on : " + copy_f_def->get_name().getString (), "log_"+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+".log");
   if (LOG) s2s_api::log("["+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+" f: " + copy_f_def->get_name().getString ()+ "] DCE - success.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(function)->get_sourceFileNameWithoutPath ()+".log");
+
+  //Apply directives on loops in the specialized body.
+  std::cout << "--------- APPLY DIRECTIVES ON SPECIALIZED BODY -----------------" << std::endl;
+  ASTRoot ASTLoops_inspefunc(copy_f_def->get_definition()->get_body());
+  ASTLoops_inspefunc.apply_directive(var);
 }

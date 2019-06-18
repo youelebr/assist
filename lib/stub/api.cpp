@@ -100,8 +100,13 @@ bool isCCXXHeader(std::string f) {
 
 SgFunctionDefinition * get_function_RosePtr(SgNode* astNode) {
   if(DEBUG) DBG_MAQAO
-  const SgNode* parentNode = astNode;
+  if (!astNode) {
+    std::cout << "[get_function_RosePtr] Error: try to locate a function from a NULL node." << std::endl;
+    return NULL;
+  }
 
+  const SgNode* parentNode = astNode;
+  
   // if(DEBUG) std::cout << "Parent is " << parentNode->class_name() << std::endl;
   while ( (isSgFunctionDefinition(parentNode) == NULL) && (parentNode->get_parent() != NULL) ) {
     parentNode = parentNode->get_parent();
@@ -264,6 +269,16 @@ int  remove_MAQAO_directives(SgStatement * astNode, std::string dirToRemove/*=""
         nb_removed++;
       } else {
         dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+      }
+    }
+  }
+
+  if (!nb_removed) {
+    if (DEBUG) {
+      if (dirToRemove != "") {
+        std::cout << "Warning: the directive "<< dirToRemove << " has not been founded." <<std::endl;
+      } else {
+        std::cout << "Warning: no maqao directive have been removed."<<std::endl;
       }
     }
   }
@@ -963,9 +978,10 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
         else if (SgExpression* expr = isSgExpression(ifstmt->get_conditional ())) {
           if (!replace_expr (expr, var, newExpr)) {return false;}
         } else {
-          std::cout << " Warning : we not handle the " 
-                    << ifstmt->get_conditional ()->class_name() 
-                    << " class yet to the constante propagation transformation!\n";
+          if (DEBUG) 
+            std::cout << " Warning : we not handle the " 
+                      << ifstmt->get_conditional ()->class_name() 
+                      << " class yet to the constante propagation transformation!\n";
         }
 
         SgBasicBlock * bodytrue = isSgBasicBlock(ifstmt->get_true_body());
@@ -986,9 +1002,10 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
         else if (SgExpression* expr = isSgExpression(switchStmt->get_item_selector ())) {
           if (!replace_expr (expr, var, newExpr)) { return false; }
         } else {
-          std::cout << "Warning :  we not handle the " 
-                    << switchStmt->get_item_selector ()->class_name() 
-                    << " class yet to the constante propagation transformation!\n";
+          if (DEBUG) 
+            std::cout << "Warning :  we not handle the " 
+                      << switchStmt->get_item_selector ()->class_name() 
+                      << " class yet to the constante propagation transformation!\n";
         }
 
         if(SgBasicBlock * subbody = isSgBasicBlock(switchStmt->get_body())) { replace_expr(subbody, var, newExpr); }
@@ -1011,7 +1028,7 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
         break;
       }
       case V_SgScopeStatement : {
-        std::cout << "Warning the class : " << stmtsList[i]->class_name() << " is not handle yet to replace expression." << std::endl;
+        if (DEBUG) std::cout << "Warning the class : " << stmtsList[i]->class_name() << " is not handle yet to replace expression." << std::endl;
         return false;
         break;
       }
@@ -1038,8 +1055,8 @@ bool replace_expr (SgBasicBlock* body, SgVariableSymbol * var, SgExpression * ne
         break;
       }
       default: {
-          // if(DEBUG) 
-            std::cout << "[replace_expr: BB] Cannot analyze " << stmtsList[i]->class_name() << " is not handle yet." << std::endl;
+          if(DEBUG) 
+            std::cout << "[replace_expr: BasicBlock] Warning Cannot analyze " << stmtsList[i]->class_name() << " is not handle yet." << std::endl;
         }
     }
 

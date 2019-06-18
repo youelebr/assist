@@ -33,7 +33,7 @@ class ASTRoot {
      *
      * @param body - Pointer on Rose representation of the global scope
      */
-    ASTRoot(SgBasicBlock *body);
+    ASTRoot(SgBasicBlock * body);
     
     //Destructor
     /**
@@ -80,6 +80,7 @@ class ASTRoot {
      * Research, into the global tree, each loop containing a maqao directive and apply it.
      */
     void apply_directive();
+    void apply_directive(std::vector<variable_spe*> varspe);
     /**
      * Return true if the gloabl tree is empty
      *

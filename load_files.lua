@@ -418,6 +418,12 @@ function s2s:load_config_file_v2 (filename, archi)
 	-- Load the descriptor file, which have been wrote as a lua file
 	dofile(filename)
 	s2s:DBG("Load arch : "..archi, 2)
+
+	if (Arch[archi] == nil) then 
+		print("Error: the target architecture does not exist in the configuration file") 
+		os.exit(0)
+	end
+
 	session = Arch[archi]
 
 	if (session["functions"] ~= nil ) then 

@@ -353,15 +353,16 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
         // CQA
         // TODO: FIND WHEN APPLY THE SVT
         if (pi[i].vec_ratio < VEC_RATIO_MIN_TO_BV && 
-          pi[i].vec_ratio != -1 &&
-          (pi[i].nb_ite_min == pi[i].nb_ite_max) && (pi[i].nb_ite_max < NB_ITE_MAX_TO_BV)) {
+            pi[i].vec_ratio != -1 &&
+           (pi[i].nb_ite_min == pi[i].nb_ite_max) && (pi[i].nb_ite_max < NB_ITE_MAX_TO_BV)) 
+        {
           if(DEBUG) std::cout << "Conditions are filed to appli the SVT" << std::endl;
           
           if (!loop->hasFixBounds()) {
             if ((pi[i].nb_ite_min == pi[i].nb_ite_max) && (pi[i].nb_ite_max < NB_ITE_MAX_TO_BV)) {
               if (VERBOSE > 1 || DEBUG) std::cout << "pi[i].nb_ite_max = " << pi[i].nb_ite_max << std::endl;
 
-              // TODO automatic specialization + short vecto 
+              // Automatic specialization + short vecto 
               // Currently only work on "classical"/canonical loop : "do i=1,n"
               if (SgVarRefExp* vr = isSgVarRefExp(loop->get_bound())) {
                 std::vector<variable_spe*> vec_vs_tmp;
@@ -386,21 +387,25 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
                 trans = true;
               } else { // Don't know when exactly apply this
                 // Currently, 4 is the only available value for the generic short vecto
-                loop->shortVectoGen(4); 
+                //loop->shortVectoGen(4); 
                 //Should be replace by
                 // loop->blockVectoGen(pi[i].nb_ite_max);     
+
+                // Since we are not sure of what to do, 
+                // the better choice is to trust the compiler to vectorize.
+                // We just indicate him to ignore its cost model.
+                loop->add_directive("VECTOR ALWAYS");
                 trans = true;               
               }
             }
           } else {
-            //TODO: check if bounds are smalls
             loop->shortVecto();
             trans = true;
           }
         }
 
         //DECAN  
-        if (pi[i].dl1_ratio_mean > DL1_RATIO_MIN_TO_TILE && !trans) {
+        if (pi[i].dl1_ratio_mean >= DL1_RATIO_MIN_TO_TILE && !trans) {
           if (VERBOSE > 1 || DEBUG) std::cout << "Average ORIG/DL1 ratio is equals to "<< pi[i].dl1_ratio_mean << std::endl;
           
           std::string directive = "MAQAO TILE";
@@ -416,9 +421,8 @@ extern "C" int main_oneview (char* input, char* outputprefix, int nb_pi, profile
           }
           if (VERBOSE > 1 || DEBUG) std::cout << "[decan] Loop founded at " << pi[i].lineStart << ":" << pi[i].lineEnd << " in " << pi[i].file << " apply tiling" << std::endl;
           if (!loop->alreadyTransformed()) {
-            if (!loop->tile(tileSize)) {
-              vprof_lct (&pi[i], loop);
-            }
+            loop->tile(tileSize);
+            trans = true;
           }
         } 
 

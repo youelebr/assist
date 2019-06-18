@@ -759,9 +759,10 @@ function s2s:s2s_launch (args, aproject)
   elseif configFile ~= nil then -- --config=<File.lua> 
     s2s:DBG("file config = "..configFile)
 
-    if args.arch ~= nil then 
-      -- input, loopTrans, funcTrans = s2s:load_config_file(configFile, args.arch) -- The first auto_version (when all directives are wrote directly in a file as they have to be in the source) /!\ Becareful -- s2s_c.c arg 11 have to be a LUA_TSTRING type
-      input, loopTrans, funcTrans = s2s:load_config_file_v2(configFile, args.arch)
+    if args.target_arch ~= nil then 
+
+      -- input, loopTrans, funcTrans = s2s:load_config_file(configFile, args.target_arch) -- The first auto_version (when all directives are wrote directly in a file as they have to be in the source) /!\ Becareful -- s2s_c.c arg 11 have to be a LUA_TSTRING type
+      input, loopTrans, funcTrans = s2s:load_config_file_v2(configFile, args.target_arch)
     else
       -- input, loopTrans, funcTrans = s2s:load_config_file(configFile, "All") -- The first auto_version ( when all directives are wrote directly in a file as they have to be in the source) /!\ Becareful -- s2s_c.c arg 11 have to be a LUA_TSTRING type
       input, loopTrans, funcTrans = s2s:load_config_file_v2(configFile, "All")  
@@ -847,9 +848,9 @@ function s2s:s2s_launch (args, aproject)
           sub_oneview_array[nbOfInfo].vec_ratio      = -1
         end
 
-        sub_oneview_array[nbOfInfo].dl1_ratio_min  = oneview_array[ite].dl1_ratio_min
-        sub_oneview_array[nbOfInfo].dl1_ratio_max  = oneview_array[ite].dl1_ratio_max
-        sub_oneview_array[nbOfInfo].dl1_ratio_mean  = oneview_array[ite].dl1_ratio_mean
+        sub_oneview_array[nbOfInfo].dl1_ratio_min  = oneview_array[ite].r_l1_min
+        sub_oneview_array[nbOfInfo].dl1_ratio_max  = oneview_array[ite].r_l1_max
+        sub_oneview_array[nbOfInfo].dl1_ratio_mean  = oneview_array[ite].r_l1_med
         if (oneview_array[ite].ite_min ~= nil) then
           sub_oneview_array[nbOfInfo].nb_ite_min     = oneview_array[ite].ite_min
           sub_oneview_array[nbOfInfo].nb_ite_max     = oneview_array[ite].ite_max

@@ -196,10 +196,11 @@ ASTRoot::ASTRoot(SgBasicBlock * body) {
   if (SgGlobal* g = isSgGlobal(body)) 
     ASTRoot(isSgGlobal(body));
   else {
-    root = isSgGlobal(body->get_parent());
-    while(!root) {
-      root = isSgGlobal(root->get_parent());
-    }
+    // root = isSgGlobal(body->get_parent());
+    // while(!root) {
+    //   root = isSgGlobal(root->get_parent());
+    // }
+    root = NULL;
     createAST(body);
   }
 }
@@ -314,6 +315,13 @@ void ASTRoot::apply_directive() {
   if(DEBUG) DBG_MAQAO
   for(int i=0; i < internalLoopsList.size(); ++i) {
     internalLoopsList[i]->apply_directive();
+  }
+}
+
+void ASTRoot::apply_directive(std::vector<variable_spe*> varspe) {
+  if(DEBUG) DBG_MAQAO
+  for(int i=0; i < internalLoopsList.size(); ++i) {
+    internalLoopsList[i]->apply_directive(varspe);
   }
 }
 
@@ -972,7 +980,7 @@ void Loop::apply_directive() {
     }
   }
 
-  if (currentFileType == "fortran") {
+  // if (currentFileType == "fortran") {
     if(DEBUG) DBG_MAQAO
     std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
     for (int i=0; i < maqaoDir.size(); i++) {
@@ -984,9 +992,9 @@ void Loop::apply_directive() {
       if (directive.find("IF_SPE_") != std::string::npos) {
         int pos_last_char = std::string::npos;
 
-        pos_last_char = directive.find_last_of('=');
-        if(pos_last_char == std::string::npos) 
-          directive.find_last_of('_');
+        pos_last_char = directive.find_last_of('_');
+        //if(pos_last_char == std::string::npos) 
+        //  pos_last_char = directive.find_last_of('_');
     
         std::string spe = directive.substr(directive.find ("IF_SPE_")+7,pos_last_char-(directive.find ("IF_SPE_")+7)).c_str();
         std::string func = s2s_api::get_function_RosePtr(loop)->get_declaration ()->get_name().getString() ;
@@ -999,15 +1007,15 @@ void Loop::apply_directive() {
                     << spe << std::endl;
     
         if (index != std::string::npos) {
-          if(DEBUG) std::cout << "Yeah, we are in the right function" << std::endl;
+          if(DEBUG) std::cout << "Yeah, we are in the right function("<<func<<")" << std::endl;
           int idx =  directive.find("IF_SPE_");
           directive.erase(idx, 7+spe.length());
+          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
         } else {
-          if(DEBUG) std::cout << "We are not in the right function" << std::endl;
-          s2s_api::remove_MAQAO_directives(loop, directive);
+          if(DEBUG) std::cout << "We are not in the right function("<<func<<")" << std::endl;
+          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
           continue;
         }
-    
       } else if (directive.find("MAQAO TAG LOOP") != std::string::npos){
         if(DEBUG) std::cout << "We found a MAQAO TAG LOOP" << std::endl;
         return;
@@ -1018,53 +1026,56 @@ void Loop::apply_directive() {
         // alors ne pas appliquer cette directive dans les fonctions générées par ASSIST 
         // (car ce sont des fonctions spécialisées)
         
-        // Pour les fonctions spé
+        // For specialized functions
         SgFunctionDefinition* func = SageInterface::getEnclosingFunctionDefinition(loop, false);
         if (func->get_file_info()->isTransformation()) {
+          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
           continue;
         }
       }
-      //s2s_api::remove_MAQAO_directives(loop, directive);
+      s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
       apply_directive(directive);
       //if (loop) s2s_api::remove_MAQAO_directives(loop);
       return;
     }
-  } else { //C/C++, all have to be done in get_MAQAO_directives
-    if(DEBUG) DBG_MAQAO
-    SgPragmaDeclaration* dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(loop));    
+    // //Now we have s2s_api::get_MAQAO_directives and s2s_api::remove_MAQAO_directives, there is no need to separate both to get pragmas and directives.
+  // } else { //C/C++, all have to be done in get_MAQAO_directives
+  //   if(DEBUG) DBG_MAQAO
+  //   SgPragmaDeclaration* dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(loop));    
 
-    while (dir) {
-      int pos = dir->get_pragma()->get_pragma().find ("MAQAO");
-      if ( pos != std::string::npos 
-        && dir->get_pragma()->get_pragma().find("MAQAO ANALYZE") == std::string::npos) 
-      {
-        std::string directive = dir->get_pragma()->get_pragma().substr(pos);
+  //   while (dir) {
+  //     int pos = dir->get_pragma()->get_pragma().find ("MAQAO");
+  //     if ( pos != std::string::npos 
+  //       && dir->get_pragma()->get_pragma().find("MAQAO ANALYZE") == std::string::npos) 
+  //     {
+  //       std::string directive = dir->get_pragma()->get_pragma().substr(pos);
 
-        if (VERBOSE > 1 || DEBUG) { std::cout << "[c - nospe] directive found : " << directive << std::endl; }
+  //       if (VERBOSE > 1 || DEBUG) { std::cout << "[c - nospe] directive found : " << directive << std::endl; }
 
-        if (directive.find("IF_SPE_") != std::string::npos) {
-          // do nothing in this case, we are not in a specialized case
-          dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-          continue;
-        } else {
-          SgPragmaDeclaration* dir2 = dir;
-          dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-          SageInterface::removeStatement (dir2, true);
-          apply_directive(directive);
-        }
-        return;
-      } else {
-        dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-        continue;
-      }
-    }
-  }
+  //       if (directive.find("IF_SPE_") != std::string::npos) {
+  //         // do nothing in this case, we are not in a specialized case
+  //         dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //         // s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
+  //         continue;
+  //       } else {
+  //         SgPragmaDeclaration* dir2 = dir;
+  //         dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //         SageInterface::removeStatement (dir2, true);
+  //         apply_directive(directive);
+  //       }
+  //       return;
+  //     } else {
+  //       dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //       continue;
+  //     }
+  //   }
+  // }
 }
 
 void Loop::apply_directive(std::vector<variable_spe*> varspe) {
   if(DEBUG) DBG_MAQAO
   if (alreadyTransformed()) return;
-  if (currentFileType == "fortran") {
+  // if (currentFileType == "fortran") {
     std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
 
     if (maqaoDir.size() != 0) {
@@ -1078,16 +1089,22 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
           if (DEBUG) { std::cout << "[fortran - varspe] directive found : " << directive << std::endl; }
 
           if (directive.find("IF_SPE_") != std::string::npos) {
-            int pos_last_char = directive.find_last_of('=');
-            if(pos_last_char == std::string::npos) directive.find_last_of('_');
+            int pos_last_char = std::string::npos;
+
+            pos_last_char = directive.find_last_of('_'); 
+            // pos_last_char = directive.find_last_of('='); 
+            // if(pos_last_char == std::string::npos) 
+            //   pos_last_char = directive.find_last_of('_');
 
             std::string spe = directive.substr(directive.find ("IF_SPE_")+7,pos_last_char-(directive.find ("IF_SPE_")+7)).c_str();
             std::string func = s2s_api::get_function_RosePtr(loop)->get_declaration ()->get_name().getString() ;
 
             int index = func.find(spe);
             if (index != std::string::npos) {
+              if(DEBUG) std::cout << "Yeah, we are in the right function("<<func<<")" << std::endl;
               int idx =  directive.find("IF_SPE_");
               directive.erase(idx, 7+spe.length()+1);
+              s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
             }
             else {
               // Découpage de la directive pour récupérer les données
@@ -1139,9 +1156,13 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
               }
 
               if (right_specialization) {
+                if(DEBUG) std::cout << "Yeah, we are in the right function" << std::endl;
+
                 int idx = directive.find("IF_SPE_");
                 directive.erase(idx, 7+varname.size()+1+varvalue.size()+1);
-              } else {              
+                s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
+              } else {      
+                if(DEBUG) std::cout << "We are not in the right function ("<<func<<")" << std::endl;        
                 s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
                 continue;
               }
@@ -1156,132 +1177,132 @@ void Loop::apply_directive(std::vector<variable_spe*> varspe) {
         } 
       }
     }
-  } else { //C/C++
-    if (DEBUG) {
-      std::cout << "loop line : "<< get_line_start() << std::endl;
-      std::cout << "previous stmt : " << SageInterface::getPreviousStatement(loop)->class_name() << std::endl;
-    }
+  // } else { //C/C++
+  //   if (DEBUG) {
+  //     std::cout << "loop line : "<< get_line_start() << std::endl;
+  //     std::cout << "previous stmt : " << SageInterface::getPreviousStatement(loop)->class_name() << std::endl;
+  //   }
 
-    std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
+  //   std::vector<std::string> maqaoDir = s2s_api::get_MAQAO_directives(loop);
 
-    int error = 0;
-    for (int i=0; i < maqaoDir.size(); i++) {
-      int pos = maqaoDir[i].find ("MAQAO");
-      if(pos != std::string::npos) {
-        std::string directive = maqaoDir[i].substr(pos);
-        if (DEBUG) { std::cout << "[c - varspe] directive found : " << directive << std::endl; }
+  //   int error = 0;
+  //   for (int i=0; i < maqaoDir.size(); i++) {
+  //     int pos = maqaoDir[i].find ("MAQAO");
+  //     if(pos != std::string::npos) {
+  //       std::string directive = maqaoDir[i].substr(pos);
+  //       if (DEBUG) { std::cout << "[c - varspe] directive found : " << directive << std::endl; }
 
-        if (directive.find("IF_SPE_") != std::string::npos) {
-          //TODO Check if information in varspe corresponding to the directive
-          std::string spe = directive.substr(directive.find ("IF_SPE_")+7,directive.find('_')-(directive.find("IF_SPE_")+7)).c_str();
-          std::string func = s2s_api::get_function_RosePtr(loop)->get_declaration ()->get_name().getString() ;
+  //       if (directive.find("IF_SPE_") != std::string::npos) {
+  //         //TODO Check if information in varspe corresponding to the directive
+  //         std::string spe = directive.substr(directive.find ("IF_SPE_")+7,directive.find('_')-(directive.find("IF_SPE_")+7)).c_str();
+  //         std::string func = s2s_api::get_function_RosePtr(loop)->get_declaration ()->get_name().getString() ;
 
-          int index = func.find(spe);
-          if (index != std::string::npos) {
-            int idx =  directive.find("IF_SPE_");
-            directive.erase(idx, 7+spe.length());
-          }
-          else {
-            // Découpage de la directive pour récupérer les données
-            bool right_specialization = false;
+  //         int index = func.find(spe);
+  //         if (index != std::string::npos) {
+  //           int idx =  directive.find("IF_SPE_");
+  //           directive.erase(idx, 7+spe.length());
+  //         }
+  //         else {
+  //           // Découpage de la directive pour récupérer les données
+  //           bool right_specialization = false;
 
-            int postruc = s2s_api::find_first_number(spe.substr(0,spe.find_first_of('_')-1).c_str());
+  //           int postruc = s2s_api::find_first_number(spe.substr(0,spe.find_first_of('_')-1).c_str());
 
-            if (postruc != -1) {
-              std::string varname = spe.substr(0, postruc-1).c_str();
-              std::string compareType = spe.substr(spe.find (varname)+varname.size()-1, 1).c_str();
-              std::string varvalue = spe.substr(postruc).c_str();
+  //           if (postruc != -1) {
+  //             std::string varname = spe.substr(0, postruc-1).c_str();
+  //             std::string compareType = spe.substr(spe.find (varname)+varname.size()-1, 1).c_str();
+  //             std::string varvalue = spe.substr(postruc).c_str();
 
-              for (int i= 0; i < varspe.size(); i++) {
-                  if (varspe[i]->var_name == varname) {
-                    if (varspe[i]->specialization == variable_spe::INTERVAL 
-                        && compareType == "b") 
-                    {
-                      std::string inf_val = varvalue.substr(varvalue.find_last_of("_")+1) ;
-                      std::string sup_val = varvalue.substr(0,varvalue.find_last_of("_"));
+  //             for (int i= 0; i < varspe.size(); i++) {
+  //                 if (varspe[i]->var_name == varname) {
+  //                   if (varspe[i]->specialization == variable_spe::INTERVAL 
+  //                       && compareType == "b") 
+  //                   {
+  //                     std::string inf_val = varvalue.substr(varvalue.find_last_of("_")+1) ;
+  //                     std::string sup_val = varvalue.substr(0,varvalue.find_last_of("_"));
 
-                      if (varspe[i]->sup_bound == atoi(sup_val.c_str()) && varspe[i]->inf_bound == atoi(varvalue.c_str())) {
-                        right_specialization = true;
+  //                     if (varspe[i]->sup_bound == atoi(sup_val.c_str()) && varspe[i]->inf_bound == atoi(varvalue.c_str())) {
+  //                       right_specialization = true;
 
-                      }
-                    }
-                    else if (varspe[i]->specialization == variable_spe::EQUALS 
-                            && compareType == "e") 
-                    {
-                      if (varspe[i]->value == atoi(varvalue.c_str())) {
-                        right_specialization = true;
-                      }
-                    }
-                    else if (varspe[i]->specialization == variable_spe::INF 
-                            && compareType == "i") 
-                    {
-                      if (varspe[i]->sup_bound == atoi(varvalue.c_str())) {
-                        right_specialization = true;
+  //                     }
+  //                   }
+  //                   else if (varspe[i]->specialization == variable_spe::EQUALS 
+  //                           && compareType == "e") 
+  //                   {
+  //                     if (varspe[i]->value == atoi(varvalue.c_str())) {
+  //                       right_specialization = true;
+  //                     }
+  //                   }
+  //                   else if (varspe[i]->specialization == variable_spe::INF 
+  //                           && compareType == "i") 
+  //                   {
+  //                     if (varspe[i]->sup_bound == atoi(varvalue.c_str())) {
+  //                       right_specialization = true;
 
-                      }
-                    }
-                    else if (varspe[i]->specialization == variable_spe::SUP 
-                            && compareType == "s") 
-                    {
-                      if (varspe[i]->inf_bound == atoi(varvalue.c_str())) {
-                        right_specialization = true;
+  //                     }
+  //                   }
+  //                   else if (varspe[i]->specialization == variable_spe::SUP 
+  //                           && compareType == "s") 
+  //                   {
+  //                     if (varspe[i]->inf_bound == atoi(varvalue.c_str())) {
+  //                       right_specialization = true;
 
-                      }
-                    }
-                  }
-              }
-            } else if (directive.find(' ')  != std::string::npos) {
+  //                     }
+  //                   }
+  //                 }
+  //             }
+  //           } else if (directive.find(' ')  != std::string::npos) {
 
-              std::string varnames = spe.substr(0, spe.find (' ')).c_str();
-              std::vector<std::string> varname = s2s_api::split(varnames, " ");
-              // Compare names in the varname list to the current var names to know if it's the right transformation to do or not
-              for (int iVarName = 0; iVarName < varname.size(); iVarName++) {
-                right_specialization = false;
+  //             std::string varnames = spe.substr(0, spe.find (' ')).c_str();
+  //             std::vector<std::string> varname = s2s_api::split(varnames, " ");
+  //             // Compare names in the varname list to the current var names to know if it's the right transformation to do or not
+  //             for (int iVarName = 0; iVarName < varname.size(); iVarName++) {
+  //               right_specialization = false;
 
-                for (int iVarSpe= 0; iVarSpe < varspe.size(); iVarSpe++) {
-                  if (varspe[iVarSpe]->var_name == varname[iVarName]) {
-                    right_specialization = true;
-                  }
-                }
-                if (!right_specialization) {
-                  //On of the var name wasn't found so it's not the right specialization
-                  break;
-                }
-              }
-            }
+  //               for (int iVarSpe= 0; iVarSpe < varspe.size(); iVarSpe++) {
+  //                 if (varspe[iVarSpe]->var_name == varname[iVarName]) {
+  //                   right_specialization = true;
+  //                 }
+  //               }
+  //               if (!right_specialization) {
+  //                 //On of the var name wasn't found so it's not the right specialization
+  //                 break;
+  //               }
+  //             }
+  //           }
 
-            if (right_specialization) {
-              int idx = directive.find("IF_SPE_");
-              directive.erase(idx, 7+directive.find(' '));
-            } else {
-              // SgPragmaDeclaration* dir2 = dir;
-              // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-              // SageInterface::removeStatement (dir2, true);
-              continue;
-            }
-          }
-        } else {  
-          // SgPragmaDeclaration* dir2 = dir;
-          // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-          //SageInterface::removeStatement (dir2, true);
-          s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
-          continue;
-        }
+  //           if (right_specialization) {
+  //             int idx = directive.find("IF_SPE_");
+  //             directive.erase(idx, 7+directive.find(' '));
+  //           } else {
+  //             // SgPragmaDeclaration* dir2 = dir;
+  //             // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //             // SageInterface::removeStatement (dir2, true);
+  //             continue;
+  //           }
+  //         }
+  //       } else {  
+  //         // SgPragmaDeclaration* dir2 = dir;
+  //         // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //         //SageInterface::removeStatement (dir2, true);
+  //         s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
+  //         continue;
+  //       }
        
-        // SgPragmaDeclaration* dir2 = dir;
-        // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-        // SageInterface::removeStatement (dir2, true);
+  //       // SgPragmaDeclaration* dir2 = dir;
+  //       // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //       // SageInterface::removeStatement (dir2, true);
 
-        s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
-        apply_directive(directive, &varspe);
+  //       s2s_api::remove_MAQAO_directives(loop, maqaoDir[i]);
+  //       apply_directive(directive, &varspe);
 
-        return;
-      } else {
-        // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
-        continue;
-      }
-    }
-  }
+  //       return;
+  //     } else {
+  //       // dir = isSgPragmaDeclaration(SageInterface::getPreviousStatement(dir));
+  //       continue;
+  //     }
+  //   }
+  // }
 }
 
 bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *varspe) {
@@ -1348,7 +1369,7 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
         depth = atoi(directive.substr(directive.find (',')+1, directive.find (' ')-1).c_str());
     }
     if (first != 1) {
-      std::cout << "If you want to interchange loops please add the directive above the loop you want to interchange." << std::endl; 
+      if (DEBUG) std::cout << "If you want to interchange loops please add the directive above the loop you want to interchange." << std::endl; 
       if (LOG) { s2s_api::log("["+s2s_api::getEnclosingsourceFile_RosePtr(parent)->get_sourceFileNameWithPath ()+" l:"+s2s_api::itoa(get_line_start())+"-"+s2s_api::itoa(get_line_end())+"] interchange - failed - the first number must be 1, other cases are not handled yet. $DIR$ MAQAO INTERCHANGE=1,2 for exmaple.", "log_"+s2s_api::getEnclosingsourceFile_RosePtr(loop)->get_sourceFileNameWithoutPath ()+".log"); }
       return false;
     }
@@ -1446,7 +1467,7 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
     //puis apeler la fonction shortVectoGen(<valeur>)
     if (int pos = directive.find('%') != std::string::npos) {
       std::string valStr = ""; 
-      std::cout << "pos = " << pos << std::endl;
+      //std::cout << "pos = " << pos << std::endl;
       // hum hum, sorry I don't remember why ... :/
       //if (pos < 11)
       //  pos=19;
@@ -1457,7 +1478,7 @@ bool Loop::apply_directive(std::string directive, std::vector<variable_spe*> *va
         }
         pos++;
       }
-      std::cout << "valstr found is : " << valStr << std::endl;
+      //std::cout << "valstr found is : " << valStr << std::endl;
       transfo = shortVectoGen(atoi(valStr.c_str()));
     }
     else if ( directive.find("AVX2") != std::string::npos ) {
@@ -3020,7 +3041,6 @@ bool Loop::specialize(std::vector<variable_spe*> var) {
     }
   }
 
-
   SgBasicBlock * true_body   = SageBuilder::buildBasicBlock();
   SgBasicBlock * false_body  = SageBuilder::buildBasicBlock();
 
@@ -3088,7 +3108,6 @@ bool Loop::specialize(std::vector<variable_spe*> var) {
   ****************************/
   SageInterface::fixStatement(loop_orig, false_body);
   ASTLoops* newlooporig = new ASTLoops (isSgScopeStatement(loop_orig), parent_id);
-
   newlooporig->apply_directive();
 
   return true;
